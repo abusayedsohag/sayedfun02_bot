@@ -20,13 +20,31 @@ const tg = async (method, body) => {
 
 const isValidUsername = (u) => /^@?[a-zA-Z0-9_]{5,32}$/.test(u);
 
-const mainMenu = {
+// const mainMenu = {
+//     keyboard: [
+//         ["🆕 New Send", "💰 Total Amount"],
+//         ["📋 All Submit"],
+//     ],
+//     resize_keyboard: true,
+// };
+
+// ---------- MENUS ----------
+const mainMenuUser = {
     keyboard: [
         ["🆕 New Send", "💰 Total Amount"],
         ["📋 All Submit"],
     ],
     resize_keyboard: true,
 };
+
+const mainMenuAdmin = {
+    keyboard: [
+        ["📋 All Submissions", "💰 Total Approved"],
+        ["🔄 Refresh Data"],
+    ],
+    resize_keyboard: true,
+};
+
 
 // ---------------- API HANDLER ----------------
 export default async function handler(req, res) {
@@ -46,92 +64,155 @@ export default async function handler(req, res) {
 
             // ---------- /start ----------
             if (text === "/start") {
+                const menu = chatId === ADMIN_ID ? mainMenuAdmin : mainMenuUser;
+
                 await tg("sendMessage", {
                     chat_id: chatId,
                     text: "Welcome! Please select an action:",
-                    reply_markup: mainMenu,
+                    reply_markup: menu,
                 });
                 return res.json({ ok: true });
             }
+
 
             const state = userState.get(chatId);
 
             // ---------- MENU ----------
             if (!state) {
-                if (text === "🆕 New Send") {
-                    userState.set(chatId, { step: "USERNAME" });
+                if (chatId === ADMIN_ID) {
+                    // ----- ADMIN MENU -----
+                    if (text === "📋 All Submissions") {
+                        const data = await fetch(SHEETDB_API).then(r => r.json());
+                        if (data.length === 0) {
+                            await tg("sendMessage", {
+                                chat_id,
+                                text: "No submissions found.",
+                                reply_markup: mainMenuAdmin,
+                            });
+                            return res.json({ ok: true });
+                        }
 
-                    // Show a keyboard with "self" as a button
-                    await tg("sendMessage", {
-                        chat_id: chatId,
-                        text: "Enter Sender Username or click 'self':",
-                        reply_markup: {
-                            keyboard: [
-                                ["self"], // clickable button
-                            ],
-                            one_time_keyboard: true, // keyboard disappears after click
-                            resize_keyboard: true,
-                        },
-                    });
-                    return res.json({ ok: true });
-                }
+                        // Show all submissions with accept/cancel inline buttons
+                        for (const i of data) {
+                            await tg("sendMessage", {
+                                chat_id: ADMIN_ID,
+                                parse_mode: "HTML",
+                                text: `👤 <b>User:</b> @${i.telegram_user}\n` +
+                                    `🔁 <b>Sender:</b> ${i.sender_username}\n` +
+                                    `💰 <b>Amount:</b> ${i.amount}\n` +
+                                    `📅 <b>Date:</b> ${i.date}`,
+                                reply_markup: {
+                                    inline_keyboard: [
+                                        [
+                                            { text: "✅ Accept", callback_data: `accept:${i.date}:${i.chat_id}` },
+                                            { text: "❌ Cancel", callback_data: `cancel:${i.date}:${i.chat_id}` }
+                                        ]
+                                    ]
+                                }
+                            });
+                        }
+                        return res.json({ ok: true });
+                    }
 
+                    if (text === "💰 Total Approved") {
+                        const data = await fetch(SHEETDB_API).then(r => r.json());
+                        const totalApproved = data
+                            .filter(d => d.status === "accepted")
+                            .reduce((sum, d) => sum + Number(d.amount || 0), 0);
 
-                if (text === "💰 Total Amount") {
-                    const data = await fetch(SHEETDB_API).then((r) => r.json());
-                    const total = data
-                        .filter(
-                            (i) =>
-                                i.telegram_user === username &&
-                                i.status === "accepted"
-                        )
-                        .reduce((s, i) => s + Number(i.amount || 0), 0);
-
-                    await tg("sendMessage", {
-                        chat_id: chatId,
-                        text: `💰 Your Approved Total: ${total}`,
-                        reply_markup: mainMenu,
-                    });
-                    return res.json({ ok: true });
-                }
-
-                if (text === "📋 All Submit") {
-                    const data = await fetch(SHEETDB_API).then((r) => r.json());
-                    const myData = data.filter((i) => i.telegram_user === username);
-
-                    if (myData.length === 0) {
                         await tg("sendMessage", {
-                            chat_id: chatId,
-                            text: "📋 No submissions found.",
-                            reply_markup: mainMenu,
+                            chat_id: ADMIN_ID,
+                            text: `💰 Total Approved Amount: ${totalApproved}`,
+                            reply_markup: mainMenuAdmin,
                         });
                         return res.json({ ok: true });
                     }
 
-                    // unique dates (YYYYMMDD)
-                    const dates = [...new Set(myData.map((i) => i.date?.slice(0, 8)))].sort().reverse();
+                    if (text === "🔄 Refresh Data") {
+                        await tg("sendMessage", {
+                            chat_id: ADMIN_ID,
+                            text: "✅ Data refreshed.",
+                            reply_markup: mainMenuAdmin,
+                        });
+                        return res.json({ ok: true });
+                    }
+                } else {
+                    // ----- NORMAL USER MENU -----
+                    if (text === "🆕 New Send") {
+                        userState.set(chatId, { step: "USERNAME" });
 
-                    const inline_keyboard = [];
-                    for (let i = 0; i < dates.length; i += 2) {
-                        const row = [];
-                        for (let d of dates.slice(i, i + 2)) {
-                            row.push({
-                                text: `${d.slice(0, 4)}-${d.slice(4, 6)}-${d.slice(6, 8)}`,
-                                callback_data: `view_date:${d}`,
-                            });
-                        }
-                        inline_keyboard.push(row);
+                        // Show a keyboard with "self" as a button
+                        await tg("sendMessage", {
+                            chat_id: chatId,
+                            text: "Enter Sender Username or click 'self':",
+                            reply_markup: {
+                                keyboard: [
+                                    ["self"], // clickable button
+                                ],
+                                one_time_keyboard: true, // keyboard disappears after click
+                                resize_keyboard: true,
+                            },
+                        });
+                        return res.json({ ok: true });
                     }
 
-                    await tg("sendMessage", {
-                        chat_id: chatId,
-                        text: "📅 Select a date:",
-                        reply_markup: { inline_keyboard },
-                    });
+                    if (text === "💰 Total Amount") {
+                        const data = await fetch(SHEETDB_API).then((r) => r.json());
+                        const total = data
+                            .filter(
+                                (i) =>
+                                    i.telegram_user === username &&
+                                    i.status === "accepted"
+                            )
+                            .reduce((s, i) => s + Number(i.amount || 0), 0);
 
-                    return res.json({ ok: true });
+                        await tg("sendMessage", {
+                            chat_id: chatId,
+                            text: `💰 Your Approved Total: ${total}`,
+                            reply_markup: mainMenuUser,
+                        });
+                        return res.json({ ok: true });
+                    }
+
+                    if (text === "📋 All Submit") {
+                        const data = await fetch(SHEETDB_API).then((r) => r.json());
+                        const myData = data.filter((i) => i.telegram_user === username);
+
+                        if (myData.length === 0) {
+                            await tg("sendMessage", {
+                                chat_id: chatId,
+                                text: "📋 No submissions found.",
+                                reply_markup: mainMenuUser,
+                            });
+                            return res.json({ ok: true });
+                        }
+
+                        // unique dates (YYYYMMDD)
+                        const dates = [...new Set(myData.map((i) => i.date?.slice(0, 8)))].sort().reverse();
+
+                        const inline_keyboard = [];
+                        for (let i = 0; i < dates.length; i += 2) {
+                            const row = [];
+                            for (let d of dates.slice(i, i + 2)) {
+                                row.push({
+                                    text: `${d.slice(0, 4)}-${d.slice(4, 6)}-${d.slice(6, 8)}`,
+                                    callback_data: `view_date:${d}`,
+                                });
+                            }
+                            inline_keyboard.push(row);
+                        }
+
+                        await tg("sendMessage", {
+                            chat_id: chatId,
+                            text: "📅 Select a date:",
+                            reply_markup: { inline_keyboard },
+                        });
+
+                        return res.json({ ok: true });
+                    }
                 }
             }
+
 
             // ---------- USERNAME ----------
             if (state?.step === "USERNAME") {
@@ -221,7 +302,7 @@ export default async function handler(req, res) {
                 await tg("sendMessage", {
                     chat_id: chatId,
                     text: "✅ Submitted! Wait for admin approval.",
-                    reply_markup: mainMenu,
+                    reply_markup: mainMenuUser,
                 });
 
                 userState.delete(chatId);
@@ -238,7 +319,31 @@ export default async function handler(req, res) {
             const data = q.data;
 
             // ---------- ACCEPT / CANCEL ----------
-            if (data.startsWith("accept") || data.startsWith("cancel")) {
+            // if (data.startsWith("accept") || data.startsWith("cancel")) {
+            //     const [action, date, targetChat] = data.split(":");
+            //     const status = action === "accept" ? "accepted" : "canceled";
+
+            //     await fetch(`${SHEETDB_API}/date/${date}`, {
+            //         method: "PATCH",
+            //         headers: { "Content-Type": "application/json" },
+            //         body: JSON.stringify({ data: [{ status }] }),
+            //     });
+
+            //     await tg("editMessageText", {
+            //         chat_id: chatId,
+            //         message_id: q.message.message_id,
+            //         text: `Submission ${status} ${status === "accepted" ? "✅" : "❌"}`,
+            //     });
+
+            //     await tg("sendMessage", {
+            //         chat_id: Number(targetChat),
+            //         text: `📢 Submission ${status.toUpperCase()}`,
+            //     });
+
+            //     return res.json({ ok: true });
+            // }
+
+            if ((data.startsWith("accept") || data.startsWith("cancel")) && chatId === ADMIN_ID) {
                 const [action, date, targetChat] = data.split(":");
                 const status = action === "accept" ? "accepted" : "canceled";
 
@@ -249,9 +354,9 @@ export default async function handler(req, res) {
                 });
 
                 await tg("editMessageText", {
-                    chat_id: chatId,
+                    chat_id,
                     message_id: q.message.message_id,
-                    text: `Submission ${status} ${status === "accepted" ? "✅" : "❌"}`,
+                    text: `Submission ${status} ${status === "accepted" ? "✅" : "❌"}`
                 });
 
                 await tg("sendMessage", {
@@ -261,6 +366,7 @@ export default async function handler(req, res) {
 
                 return res.json({ ok: true });
             }
+
 
             // ---------- VIEW DATE ----------
             if (data.startsWith("view_date:")) {
