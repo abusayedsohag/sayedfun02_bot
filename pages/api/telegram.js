@@ -2,8 +2,8 @@ const BOT_TOKEN = process.env.BOT_TOKEN;
 const ADMIN_ID = Number(process.env.ADMIN_ID);
 const SHEETDB_API = process.env.SHEETDB_API;
 
-// In-memory state (Vercel serverless friendly for short flows)
-const userState = new Map(); // chatId -> { step,sender }
+// In-memory state
+const userState = new Map(); // chatId -> { step, sender }
 
 // ---------------- HELPERS ----------------
 const tg = async (method, body) => {
@@ -30,7 +30,6 @@ const mainMenu = {
 
 // ---------------- API HANDLER ----------------
 export default async function handler(req, res) {
-  // Health check
   if (req.method !== "POST") {
     return res.status(200).send("Bot is running");
   }
@@ -43,7 +42,6 @@ export default async function handler(req, res) {
       const chatId = update.message.chat.id;
       const text = update.message.text || "";
 
-      // SAFE user object
       const from = update.message.from || {};
       const username =
         from.username ||
@@ -92,7 +90,7 @@ export default async function handler(req, res) {
         }
       }
 
-      // ---------- USERNAME STEP ----------
+      // ---------- USERNAME ----------
       if (state?.step === "USERNAME") {
         let sender = text;
 
@@ -127,7 +125,7 @@ export default async function handler(req, res) {
         return res.json({ ok: true });
       }
 
-      // ---------- AMOUNT STEP ----------
+      // ---------- AMOUNT ----------
       if (state?.step === "AMOUNT") {
         if (!/^\d+$/.test(text)) {
           await tg("sendMessage", {
@@ -151,7 +149,6 @@ export default async function handler(req, res) {
             data: [
               {
                 date: dateId,
-                moderator: state.moderator,
                 telegram_user: username,
                 chat_id: chatId,
                 sender_username: state.sender,
@@ -169,7 +166,6 @@ export default async function handler(req, res) {
           text:
             `📩 <b>New Submission</b>\n\n` +
             `👤 <b>From:</b> @${username}\n` +
-            `🛡 <b>Moderator:</b> ${state.moderator}\n` +
             `🔁 <b>Sender:</b> ${state.sender}\n` +
             `💰 <b>Amount:</b> ${amount}`,
           reply_markup: {
@@ -188,7 +184,6 @@ export default async function handler(req, res) {
           },
         });
 
-        // Confirm User
         await tg("sendMessage", {
           chat_id: chatId,
           text: "✅ Submitted! Wait for admin approval.",
@@ -203,10 +198,9 @@ export default async function handler(req, res) {
     // ================= CALLBACK =================
     if (update.callback_query) {
       const q = update.callback_query;
-      const data = q.data;
       const chatId = q.message.chat.id;
+      const data = q.data;
 
-      // Admin action
       if (data.startsWith("accept") || data.startsWith("cancel")) {
         const [action, date, targetChat] = data.split(":");
         const status = action === "accept" ? "accepted" : "canceled";
