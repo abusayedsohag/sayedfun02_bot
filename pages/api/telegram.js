@@ -353,19 +353,27 @@ export default async function handler(req, res) {
                     body: JSON.stringify({ data: [{ status }] }),
                 });
 
-                await tg("editMessageText", {
-                    chat_id,
+                // ❌ remove submission message
+                await tg("deleteMessage", {
+                    chat_id: chatId,
                     message_id: q.message.message_id,
-                    text: `Submission ${status} ${status === "accepted" ? "✅" : "❌"}`
                 });
 
+                // ✅ success msg for admin
+                await tg("sendMessage", {
+                    chat_id: ADMIN_ID,
+                    text: `✅ Submission ${status.toUpperCase()} successfully`,
+                });
+
+                // notify user
                 await tg("sendMessage", {
                     chat_id: Number(targetChat),
-                    text: `📢 Submission ${status.toUpperCase()}`,
+                    text: `📢 Your submission was ${status.toUpperCase()}`,
                 });
 
                 return res.json({ ok: true });
             }
+
 
 
             // ---------- VIEW DATE ----------
