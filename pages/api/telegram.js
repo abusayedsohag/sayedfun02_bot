@@ -105,31 +105,34 @@ export default async function handler(req, res) {
                         return res.json({ ok: true });
                     }
 
-                    let msg = "📋 <b>Your Submissions</b>\n\n";
+                    // unique dates (YYYYMMDD)
+                    const dates = [
+                        ...new Set(
+                            myData.map((i) => i.date?.slice(0, 8))
+                        ),
+                    ].sort().reverse();
 
-                    myData
-                        .slice(-10) // last 10 entries
-                        .reverse()
-                        .forEach((i) => {
-                            const statusIcon =
-                                i.status === "accepted"
-                                    ? "✅"
-                                    : i.status === "pending"
-                                        ? "⏳"
-                                        : "❌";
-
-                            msg += `${statusIcon} ${i.amount} | ${i.sender_username}\n`;
-                        });
+                    const inline_keyboard = [];
+                    for (let i = 0; i < dates.length; i += 2) {
+                        const row = [];
+                        for (let d of dates.slice(i, i + 2)) {
+                            row.push({
+                                text: `${d.slice(0, 4)}-${d.slice(4, 6)}-${d.slice(6, 8)}`,
+                                callback_data: `view_date:${d}`,
+                            });
+                        }
+                        inline_keyboard.push(row);
+                    }
 
                     await tg("sendMessage", {
                         chat_id: chatId,
-                        text: msg,
-                        parse_mode: "HTML",
-                        reply_markup: mainMenu,
+                        text: "📅 Select a date:",
+                        reply_markup: { inline_keyboard },
                     });
 
                     return res.json({ ok: true });
                 }
+
             }
 
             // ---------- USERNAME ----------
@@ -267,6 +270,61 @@ export default async function handler(req, res) {
 
                 return res.json({ ok: true });
             }
+
+            // VIEW DATE SUBMISSIONS
+            if (data.startsWith("view_date:")) {
+                const selectedDate = data.split(":")[1];
+
+                const allData = await fetch(SHEETDB_API).then((r) => r.json());
+
+                const myData = allData.filter(
+                    (i) =>
+                        i.telegram_user === username &&
+                        i.date?.startsWith(selectedDate)
+                );
+
+                if (myData.length === 0) {
+                    await tg("editMessageText", {
+                        chat_id: chatId,
+                        message_id: q.message.message_id,
+                        text: "❌ No data found for this date.",
+                    });
+                    return res.json({ ok: true });
+                }
+
+                let msg =
+                    `📋 <b>Submissions for ${selectedDate.slice(0, 4)}-` +
+                    `${selectedDate.slice(4, 6)}-${selectedDate.slice(6, 8)}</b>\n\n`;
+
+                let dayTotal = 0;
+
+                myData.forEach((i) => {
+                    const icon =
+                        i.status === "accepted"
+                            ? "✅"
+                            : i.status === "pending"
+                                ? "⏳"
+                                : "❌";
+
+                    msg += `${icon} ${i.amount} | ${i.sender_username}\n`;
+
+                    if (i.status === "accepted") {
+                        dayTotal += Number(i.amount || 0);
+                    }
+                });
+
+                msg += `\n━━━━━━━━━━━━━━\n💰 <b>Daily Total:</b> ${dayTotal}`;
+
+                await tg("editMessageText", {
+                    chat_id: chatId,
+                    message_id: q.message.message_id,
+                    text: msg,
+                    parse_mode: "HTML",
+                });
+
+                return res.json({ ok: true });
+            }
+
         }
 
         return res.json({ ok: true });
