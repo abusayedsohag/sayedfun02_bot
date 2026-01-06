@@ -81,38 +81,76 @@ export default async function handler(req, res) {
             if (!state) {
                 if (chatId === ADMIN_ID) {
                     // ----- ADMIN MENU -----
-                    if (text === "📋 All Submissions") {
+                    if (chatId === ADMIN_ID && text === "📋 All Submissions") {
                         const data = await fetch(SHEETDB_API).then(r => r.json());
-                        if (data.length === 0) {
+
+                        const pending = data.filter(i =>
+                            i.status === "accepted" || i.status === "pending"
+                        );
+
+                        if (!pending.length) {
                             await tg("sendMessage", {
-                                chat_id,
-                                text: "No submissions found.",
-                                reply_markup: mainMenuAdmin,
+                                chat_id: ADMIN_ID,
+                                text: "✅ No pending submissions",
+                                reply_markup: mainMenuAdmin
                             });
                             return res.json({ ok: true });
                         }
 
-                        // Show all submissions with accept/cancel inline buttons
-                        for (const i of data) {
+                        // group by username
+                        const groupedUser = {};
+                        pending.forEach(i => {
+                            if (!groupedUser[i.telegram_user]) groupedUser[i.telegram_user] = [];
+                            groupedUser[i.telegram_user].push(i);
+                        });
+
+                        for (const user in groupedUser) {
                             await tg("sendMessage", {
                                 chat_id: ADMIN_ID,
-                                parse_mode: "HTML",
-                                text: `👤 <b>User:</b> @${i.telegram_user}\n` +
-                                    `🔁 <b>Sender:</b> ${i.sender_username}\n` +
-                                    `💰 <b>Amount:</b> ${i.amount}\n` +
-                                    `📅 <b>Date:</b> ${i.date}`,
-                                reply_markup: {
-                                    inline_keyboard: [
-                                        [
-                                            { text: "✅ Accept", callback_data: `accept:${i.date}:${i.chat_id}` },
-                                            { text: "❌ Cancel", callback_data: `cancel:${i.date}:${i.chat_id}` }
-                                        ]
-                                    ]
-                                }
+                                text: `👤 USER: @${user}`
                             });
+
+                            // group by date
+                            const groupedDate = {};
+                            groupedUser[user].forEach(i => {
+                                const d = i.date.slice(0, 8);
+                                if (!groupedDate[d]) groupedDate[d] = [];
+                                groupedDate[d].push(i);
+                            });
+
+                            for (const date in groupedDate) {
+                                await tg("sendMessage", {
+                                    chat_id: ADMIN_ID,
+                                    text: `📅 Date: ${date.slice(0, 4)}-${date.slice(4, 6)}-${date.slice(6, 8)}`
+                                });
+
+                                for (const i of groupedDate[date]) {
+                                    const buttons = [];
+
+                                    if (i.status === "accepted") {
+                                        buttons.push([
+                                            {
+                                                text: "💸 Paid",
+                                                callback_data: `paid:${i.date}:${i.chat_id}`
+                                            }
+                                        ]);
+                                    }
+
+                                    await tg("sendMessage", {
+                                        chat_id: ADMIN_ID,
+                                        text:
+                                            `🔁 Sender: ${i.sender_username}\n` +
+                                            `💰 Amount: ${i.amount}\n` +
+                                            `📌 Status: ${i.status}`,
+                                        reply_markup: buttons.length ? { inline_keyboard: buttons } : undefined
+                                    });
+                                }
+                            }
                         }
+
                         return res.json({ ok: true });
                     }
+
 
                     if (text === "💰 Total Approved") {
                         const data = await fetch(SHEETDB_API).then(r => r.json());
