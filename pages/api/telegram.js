@@ -3,7 +3,7 @@ const ADMIN_ID = Number(process.env.ADMIN_ID);
 const SHEETDB_API = process.env.SHEETDB_API;
 
 // In-memory state (Vercel serverless friendly for short flows)
-const userState = new Map(); // chatId -> { step, moderator, sender }
+const userState = new Map(); // chatId -> { step,sender }
 
 // ---------------- HELPERS ----------------
 const tg = async (method, body) => {
@@ -26,19 +26,6 @@ const mainMenu = {
     ["📋 All Submit"],
   ],
   resize_keyboard: true,
-};
-
-const moderators = ["Millat", "Shifat", "Mahin", "Nirob"];
-
-const moderatorKeyboard = {
-  inline_keyboard: moderators.reduce((acc, m, i) => {
-    if (i % 2 === 0) acc.push([]);
-    acc[acc.length - 1].push({
-      text: m,
-      callback_data: `set_mod:${m}`,
-    });
-    return acc;
-  }, []),
 };
 
 // ---------------- API HANDLER ----------------
@@ -78,11 +65,10 @@ export default async function handler(req, res) {
       // ---------- MENU ----------
       if (!state) {
         if (text === "🆕 New Send") {
-          userState.set(chatId, { step: "MODERATOR" });
+          userState.set(chatId, { step: "USERNAME" });
           await tg("sendMessage", {
             chat_id: chatId,
-            text: "📋 Select a Moderator:",
-            reply_markup: moderatorKeyboard,
+            text: "Enter Sender Username (or type 'self'):",
           });
           return res.json({ ok: true });
         }
@@ -219,19 +205,6 @@ export default async function handler(req, res) {
       const q = update.callback_query;
       const data = q.data;
       const chatId = q.message.chat.id;
-
-      // Moderator select
-      if (data.startsWith("set_mod:")) {
-        const mod = data.split(":")[1];
-        userState.set(chatId, { step: "USERNAME", moderator: mod });
-
-        await tg("editMessageText", {
-          chat_id: chatId,
-          message_id: q.message.message_id,
-          text: `✅ Moderator: ${mod}\n\nNow enter Sender Username (or type 'self'):`,
-        });
-        return res.json({ ok: true });
-      }
 
       // Admin action
       if (data.startsWith("accept") || data.startsWith("cancel")) {
