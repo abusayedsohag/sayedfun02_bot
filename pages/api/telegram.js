@@ -39,7 +39,7 @@ const mainMenuUser = {
 
 const mainMenuAdmin = {
     keyboard: [
-        ["📋 All Submissions", "💰 Total Approved"],
+        ["📋 All Submissions", "📊 Total Info"],
         ["🔄 Refresh Data"],
     ],
     resize_keyboard: true,
@@ -158,19 +158,77 @@ export default async function handler(req, res) {
                     }
 
 
-                    if (text === "💰 Total Approved") {
+                    if (chatId === ADMIN_ID && text === "📊 Total Info") {
                         const data = await fetch(SHEETDB_API).then(r => r.json());
-                        const totalApproved = data
-                            .filter(d => d.status === "accepted")
-                            .reduce((sum, d) => sum + Number(d.amount || 0), 0);
 
+                        if (!data.length) {
+                            await tg("sendMessage", {
+                                chat_id: ADMIN_ID,
+                                text: "No data found"
+                            });
+                            return res.json({ ok: true });
+                        }
+
+                        // counters
+                        const userStats = {};
+                        let totalAccepted = 0;
+                        let totalCanceled = 0;
+                        let totalPaid = 0;
+
+                        data.forEach(i => {
+                            const user = i.telegram_user || "unknown";
+
+                            if (!userStats[user]) {
+                                userStats[user] = {
+                                    accepted: 0,
+                                    canceled: 0,
+                                    paid: 0
+                                };
+                            }
+
+                            if (i.status === "accepted") {
+                                userStats[user].accepted++;
+                                totalAccepted++;
+                            }
+
+                            if (i.status === "canceled") {
+                                userStats[user].canceled++;
+                                totalCanceled++;
+                            }
+
+                            if (i.status === "paid") {
+                                userStats[user].paid++;
+                                totalPaid++;
+                            }
+                        });
+
+                        // per user message
+                        for (const user in userStats) {
+                            const s = userStats[user];
+
+                            await tg("sendMessage", {
+                                chat_id: ADMIN_ID,
+                                text:
+                                    `👤 @${user}\n` +
+                                    `✅ Accepted: ${s.accepted}\n` +
+                                    `❌ Canceled: ${s.canceled}\n` +
+                                    `💸 Paid: ${s.paid}`
+                            });
+                        }
+
+                        // grand total
                         await tg("sendMessage", {
                             chat_id: ADMIN_ID,
-                            text: `💰 Total Approved Amount: ${totalApproved}`,
-                            reply_markup: mainMenuAdmin,
+                            text:
+                                `📦 GRAND TOTAL\n\n` +
+                                `✅ Accepted: ${totalAccepted}\n` +
+                                `❌ Canceled: ${totalCanceled}\n` +
+                                `💸 Paid: ${totalPaid}`
                         });
+
                         return res.json({ ok: true });
                     }
+
 
                     if (text === "🔄 Refresh Data") {
                         await tg("sendMessage", {
