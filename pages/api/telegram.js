@@ -41,12 +41,8 @@ export default async function handler(req, res) {
         if (update.message) {
             const chatId = update.message.chat.id;
             const text = update.message.text || "";
-
             const from = update.message.from || {};
-            const username =
-                from.username ||
-                from.first_name ||
-                "NoUsername";
+            const username = from.username || from.first_name || "NoUsername";
 
             // ---------- /start ----------
             if (text === "/start") {
@@ -91,10 +87,7 @@ export default async function handler(req, res) {
 
                 if (text === "📋 All Submit") {
                     const data = await fetch(SHEETDB_API).then((r) => r.json());
-
-                    const myData = data.filter(
-                        (i) => i.telegram_user === username
-                    );
+                    const myData = data.filter((i) => i.telegram_user === username);
 
                     if (myData.length === 0) {
                         await tg("sendMessage", {
@@ -106,11 +99,7 @@ export default async function handler(req, res) {
                     }
 
                     // unique dates (YYYYMMDD)
-                    const dates = [
-                        ...new Set(
-                            myData.map((i) => i.date?.slice(0, 8))
-                        ),
-                    ].sort().reverse();
+                    const dates = [...new Set(myData.map((i) => i.date?.slice(0, 8)))].sort().reverse();
 
                     const inline_keyboard = [];
                     for (let i = 0; i < dates.length; i += 2) {
@@ -132,7 +121,6 @@ export default async function handler(req, res) {
 
                     return res.json({ ok: true });
                 }
-
             }
 
             // ---------- USERNAME ----------
@@ -181,10 +169,7 @@ export default async function handler(req, res) {
                 }
 
                 const amount = Number(text);
-                const dateId = new Date()
-                    .toISOString()
-                    .replace(/[-:.TZ]/g, "")
-                    .slice(0, 14);
+                const dateId = new Date().toISOString().replace(/[-:.TZ]/g, "").slice(0, 14);
 
                 // Save to SheetDB
                 await fetch(SHEETDB_API, {
@@ -216,14 +201,8 @@ export default async function handler(req, res) {
                     reply_markup: {
                         inline_keyboard: [
                             [
-                                {
-                                    text: "✅ Accept",
-                                    callback_data: `accept:${dateId}:${chatId}`,
-                                },
-                                {
-                                    text: "❌ Cancel",
-                                    callback_data: `cancel:${dateId}:${chatId}`,
-                                },
+                                { text: "✅ Accept", callback_data: `accept:${dateId}:${chatId}` },
+                                { text: "❌ Cancel", callback_data: `cancel:${dateId}:${chatId}` },
                             ],
                         ],
                     },
@@ -244,8 +223,11 @@ export default async function handler(req, res) {
         if (update.callback_query) {
             const q = update.callback_query;
             const chatId = q.message.chat.id;
+            const from = q.from || {};
+            const username = from.username || from.first_name || "NoUsername";
             const data = q.data;
 
+            // ---------- ACCEPT / CANCEL ----------
             if (data.startsWith("accept") || data.startsWith("cancel")) {
                 const [action, date, targetChat] = data.split(":");
                 const status = action === "accept" ? "accepted" : "canceled";
@@ -259,8 +241,7 @@ export default async function handler(req, res) {
                 await tg("editMessageText", {
                     chat_id: chatId,
                     message_id: q.message.message_id,
-                    text: `Submission ${status} ${status === "accepted" ? "✅" : "❌"
-                        }`,
+                    text: `Submission ${status} ${status === "accepted" ? "✅" : "❌"}`,
                 });
 
                 await tg("sendMessage", {
@@ -271,16 +252,13 @@ export default async function handler(req, res) {
                 return res.json({ ok: true });
             }
 
-            // VIEW DATE SUBMISSIONS
+            // ---------- VIEW DATE ----------
             if (data.startsWith("view_date:")) {
                 const selectedDate = data.split(":")[1];
-
                 const allData = await fetch(SHEETDB_API).then((r) => r.json());
 
                 const myData = allData.filter(
-                    (i) =>
-                        i.telegram_user === username &&
-                        i.date?.startsWith(selectedDate)
+                    (i) => i.telegram_user === username && i.date?.startsWith(selectedDate)
                 );
 
                 if (myData.length === 0) {
@@ -292,25 +270,13 @@ export default async function handler(req, res) {
                     return res.json({ ok: true });
                 }
 
-                let msg =
-                    `📋 <b>Submissions for ${selectedDate.slice(0, 4)}-` +
-                    `${selectedDate.slice(4, 6)}-${selectedDate.slice(6, 8)}</b>\n\n`;
-
+                let msg = `📋 <b>Submissions for ${selectedDate.slice(0, 4)}-${selectedDate.slice(4, 6)}-${selectedDate.slice(6, 8)}</b>\n\n`;
                 let dayTotal = 0;
 
                 myData.forEach((i) => {
-                    const icon =
-                        i.status === "accepted"
-                            ? "✅"
-                            : i.status === "pending"
-                                ? "⏳"
-                                : "❌";
-
+                    const icon = i.status === "accepted" ? "✅" : i.status === "pending" ? "⏳" : "❌";
                     msg += `${icon} ${i.amount} | ${i.sender_username}\n`;
-
-                    if (i.status === "accepted") {
-                        dayTotal += Number(i.amount || 0);
-                    }
+                    if (i.status === "accepted") dayTotal += Number(i.amount || 0);
                 });
 
                 msg += `\n━━━━━━━━━━━━━━\n💰 <b>Daily Total:</b> ${dayTotal}`;
@@ -324,7 +290,6 @@ export default async function handler(req, res) {
 
                 return res.json({ ok: true });
             }
-
         }
 
         return res.json({ ok: true });
