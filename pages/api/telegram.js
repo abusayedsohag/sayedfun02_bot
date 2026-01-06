@@ -445,29 +445,51 @@ export default async function handler(req, res) {
             //     return res.json({ ok: true });
             // }
 
-            if ((data.startsWith("accept") || data.startsWith("cancel")) && chatId === ADMIN_ID) {
-                const [action, date, targetChat] = data.split(":");
-                const status = action === "accept" ? "accepted" : "canceled";
+            if (data.startsWith("accept") || data.startsWith("cancel") || data.startsWith("paid")) {
 
-                await fetch(`${SHEETDB_API}/date/${date}`, {
+                const [action, dateId, targetChat] = data.split(":");
+
+                let status = "";
+                let userMsg = "";
+
+                if (action === "accept") {
+                    status = "accepted";
+                    userMsg = "✅ Your submission has been ACCEPTED";
+                }
+
+                if (action === "cancel") {
+                    status = "canceled";
+                    userMsg = "❌ Your submission has been CANCELED";
+                }
+
+                if (action === "paid") {
+                    status = "paid";
+                    userMsg = "💸 Your payment has been MARKED AS PAID";
+                }
+
+                // 1️⃣ Update SheetDB
+                await fetch(`${SHEETDB_API}/date/${dateId}`, {
                     method: "PATCH",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ data: [{ status }] }),
+                    body: JSON.stringify({ data: [{ status }] })
                 });
 
+                // 2️⃣ Update admin message
                 await tg("editMessageText", {
                     chat_id: chatId,
                     message_id: q.message.message_id,
-                    parse_mode: "HTML",
-                    text: q.message.text.replace(/Status:.*/i, `📌 Status: ${status.toUpperCase()}`),
-                    reply_markup:
-                        status === "accepted"
-                            ? { inline_keyboard: [[{ text: "💸 Paid", callback_data: `paid:${date}:${targetChat}` }]] }
-                            : undefined
+                    text: `Status updated: ${status.toUpperCase()}`
+                });
+
+                // 3️⃣ Notify user (🔥 THIS WAS MISSING 🔥)
+                await tg("sendMessage", {
+                    chat_id: Number(targetChat),
+                    text: userMsg
                 });
 
                 return res.json({ ok: true });
             }
+
 
 
 
