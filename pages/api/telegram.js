@@ -452,6 +452,36 @@ export default async function handler(req, res) {
 
                 return res.json({ ok: true });
             }
+
+            if (data.startsWith("paid:") && chatId === ADMIN_ID) {
+                const [, date, targetChat] = data.split(":");
+
+                await fetch(`${SHEETDB_API}/date/${date}`, {
+                    method: "PATCH",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ data: [{ status: "paid" }] }),
+                });
+
+                // remove message
+                await tg("deleteMessage", {
+                    chat_id: chatId,
+                    message_id: q.message.message_id,
+                });
+
+                // admin confirmation
+                await tg("sendMessage", {
+                    chat_id: ADMIN_ID,
+                    text: "💸 Marked as PAID successfully"
+                });
+
+                // notify user
+                await tg("sendMessage", {
+                    chat_id: Number(targetChat),
+                    text: "💰 Your payment has been completed ✅"
+                });
+
+                return res.json({ ok: true });
+            }
         }
 
         return res.json({ ok: true });
