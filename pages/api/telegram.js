@@ -60,12 +60,22 @@ export default async function handler(req, res) {
             if (!state) {
                 if (text === "🆕 New Send") {
                     userState.set(chatId, { step: "USERNAME" });
+
+                    // Show a keyboard with "self" as a button
                     await tg("sendMessage", {
                         chat_id: chatId,
-                        text: "Enter Sender Username (or type 'self'):",
+                        text: "Enter Sender Username or click 'self':",
+                        reply_markup: {
+                            keyboard: [
+                                ["self"], // clickable button
+                            ],
+                            one_time_keyboard: true, // keyboard disappears after click
+                            resize_keyboard: true,
+                        },
                     });
                     return res.json({ ok: true });
                 }
+
 
                 if (text === "💰 Total Amount") {
                     const data = await fetch(SHEETDB_API).then((r) => r.json());
