@@ -84,65 +84,71 @@ export default async function handler(req, res) {
                     if (chatId === ADMIN_ID && text === "📋 All Submissions") {
                         const data = await fetch(SHEETDB_API).then(r => r.json());
 
-                        const pending = data.filter(i =>
-                            i.status === "accepted" || i.status === "pending"
-                        );
-
-                        if (!pending.length) {
+                        if (!data.length) {
                             await tg("sendMessage", {
                                 chat_id: ADMIN_ID,
-                                text: "✅ No pending submissions",
+                                text: "No submissions found",
                                 reply_markup: mainMenuAdmin
                             });
                             return res.json({ ok: true });
                         }
 
                         // group by username
-                        const groupedUser = {};
-                        pending.forEach(i => {
-                            if (!groupedUser[i.telegram_user]) groupedUser[i.telegram_user] = [];
-                            groupedUser[i.telegram_user].push(i);
+                        const byUser = {};
+                        data.forEach(i => {
+                            if (!byUser[i.telegram_user]) byUser[i.telegram_user] = [];
+                            byUser[i.telegram_user].push(i);
                         });
 
-                        for (const user in groupedUser) {
+                        for (const user in byUser) {
                             await tg("sendMessage", {
                                 chat_id: ADMIN_ID,
                                 text: `👤 USER: @${user}`
                             });
 
                             // group by date
-                            const groupedDate = {};
-                            groupedUser[user].forEach(i => {
+                            const byDate = {};
+                            byUser[user].forEach(i => {
                                 const d = i.date.slice(0, 8);
-                                if (!groupedDate[d]) groupedDate[d] = [];
-                                groupedDate[d].push(i);
+                                if (!byDate[d]) byDate[d] = [];
+                                byDate[d].push(i);
                             });
 
-                            for (const date in groupedDate) {
+                            for (const date in byDate) {
                                 await tg("sendMessage", {
                                     chat_id: ADMIN_ID,
                                     text: `📅 Date: ${date.slice(0, 4)}-${date.slice(4, 6)}-${date.slice(6, 8)}`
                                 });
 
-                                for (const i of groupedDate[date]) {
-                                    const buttons = [];
+                                for (const i of byDate[date]) {
+
+                                    let buttons = [];
+
+                                    if (i.status === "pending") {
+                                        buttons = [[
+                                            { text: "✅ Accept", callback_data: `accept:${i.date}:${i.chat_id}` },
+                                            { text: "❌ Cancel", callback_data: `cancel:${i.date}:${i.chat_id}` }
+                                        ]];
+                                    }
 
                                     if (i.status === "accepted") {
-                                        buttons.push([
-                                            {
-                                                text: "💸 Paid",
-                                                callback_data: `paid:${i.date}:${i.chat_id}`
-                                            }
-                                        ]);
+                                        buttons = [[
+                                            { text: "💸 Paid", callback_data: `paid:${i.date}:${i.chat_id}` }
+                                        ]];
                                     }
+
+                                    // canceled / paid → no button
 
                                     await tg("sendMessage", {
                                         chat_id: ADMIN_ID,
+                                        parse_mode: "HTML",
                                         text:
-                                            `🔁 Sender: ${i.sender_username}\n` +
-                                            `💰 Amount: ${i.amount}\n` +
-                                            `📌 Status: ${i.status}`,
-                                        reply_markup: buttons.length ? { inline_keyboard: buttons } : undefined
+                                            `🔁 <b>Sender:</b> ${i.sender_username}\n` +
+                                            `💰 <b>Amount:</b> ${i.amount}\n` +
+                                            `📌 <b>Status:</b> ${i.status.toUpperCase()}`,
+                                        reply_markup: buttons.length
+                                            ? { inline_keyboard: buttons }
+                                            : undefined
                                     });
                                 }
                             }
@@ -391,26 +397,20 @@ export default async function handler(req, res) {
                     body: JSON.stringify({ data: [{ status }] }),
                 });
 
-                // ❌ remove submission message
-                await tg("deleteMessage", {
+                await tg("editMessageText", {
                     chat_id: chatId,
                     message_id: q.message.message_id,
-                });
-
-                // ✅ success msg for admin
-                await tg("sendMessage", {
-                    chat_id: ADMIN_ID,
-                    text: `✅ Submission ${status.toUpperCase()} successfully`,
-                });
-
-                // notify user
-                await tg("sendMessage", {
-                    chat_id: Number(targetChat),
-                    text: `📢 Your submission was ${status.toUpperCase()}`,
+                    parse_mode: "HTML",
+                    text: q.message.text.replace(/Status:.*/i, `📌 Status: ${status.toUpperCase()}`),
+                    reply_markup:
+                        status === "accepted"
+                            ? { inline_keyboard: [[{ text: "💸 Paid", callback_data: `paid:${date}:${targetChat}` }]] }
+                            : undefined
                 });
 
                 return res.json({ ok: true });
             }
+
 
 
 
@@ -454,7 +454,7 @@ export default async function handler(req, res) {
             }
 
             if (data.startsWith("paid:") && chatId === ADMIN_ID) {
-                const [, date, targetChat] = data.split(":");
+                const [, date] = data.split(":");
 
                 await fetch(`${SHEETDB_API}/date/${date}`, {
                     method: "PATCH",
@@ -462,26 +462,16 @@ export default async function handler(req, res) {
                     body: JSON.stringify({ data: [{ status: "paid" }] }),
                 });
 
-                // remove message
-                await tg("deleteMessage", {
+                await tg("editMessageText", {
                     chat_id: chatId,
                     message_id: q.message.message_id,
-                });
-
-                // admin confirmation
-                await tg("sendMessage", {
-                    chat_id: ADMIN_ID,
-                    text: "💸 Marked as PAID successfully"
-                });
-
-                // notify user
-                await tg("sendMessage", {
-                    chat_id: Number(targetChat),
-                    text: "💰 Your payment has been completed ✅"
+                    parse_mode: "HTML",
+                    text: q.message.text.replace(/Status:.*/i, "📌 Status: PAID"),
                 });
 
                 return res.json({ ok: true });
             }
+
         }
 
         return res.json({ ok: true });
