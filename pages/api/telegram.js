@@ -135,7 +135,7 @@ export default async function handler(req, res) {
 
             // ---------- USERNAME ----------
             if (state?.step === "USERNAME") {
-                let sender = text;
+                let sender = text.trim();
 
                 if (text.toLowerCase() === "self") {
                     if (!from.username) {
