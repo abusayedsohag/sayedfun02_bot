@@ -391,7 +391,7 @@ export default async function handler(req, res) {
                         `👤 <b>From:</b> @${username}\n` +
                         `🔁 <b>Sender:</b> ${state.sender}\n` +
                         `💰 <b>Amount:</b> ${amount}\n\n` + 
-                        `<code>@${username} | ${amount}</code>`,
+                        `<code>@${state.sender} | ${amount}</code>`,
                     reply_markup: {
                         inline_keyboard: [
                             [
