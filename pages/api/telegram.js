@@ -132,7 +132,7 @@ async function showPaidListSingleMessage(chatId) {
             msg += `📅 <b>${d.slice(0, 4)}-${d.slice(4, 6)}-${d.slice(6, 8)}</b>\n`;
 
             byDate[d].forEach(i => {
-                msg += `• ${i.sender_username} | ${i.amount}\n`;
+                msg += `💰 ${i.sender_username} | ${i.amount}\n`;
             });
 
             msg += `\n`;
@@ -145,6 +145,62 @@ async function showPaidListSingleMessage(chatId) {
         });
     }
 }
+
+async function showAllListSingleMessage(chatId) {
+    const data = await fetch(SHEETDB_API).then(r => r.json());
+
+    if (!data.length) {
+        await tg("sendMessage", {
+            chat_id: chatId,
+            text: "❌ No data found"
+        });
+        return;
+    }
+
+    // group by user
+    const byUser = {};
+    data.forEach(i => {
+        if (!byUser[i.telegram_user]) byUser[i.telegram_user] = [];
+        byUser[i.telegram_user].push(i);
+    });
+
+    for (const user in byUser) {
+        let msg = `👤 <b>USER:</b> @${user}\n\n`;
+
+        // group by date
+        const byDate = {};
+        byUser[user].forEach(i => {
+            const d = i.date.slice(0, 8);
+            if (!byDate[d]) byDate[d] = [];
+            byDate[d].push(i);
+        });
+
+        const sortedDates = Object.keys(byDate).sort().reverse();
+
+        for (const d of sortedDates) {
+            msg += `📅 <b>${d.slice(0, 4)}-${d.slice(4, 6)}-${d.slice(6, 8)}</b>\n`;
+
+            byDate[d].forEach(i => {
+                const icon =
+                    i.status === "pending" ? "⏳" :
+                        i.status === "accepted" ? "✅" :
+                            i.status === "paid" ? "💸" :
+                                "❌";
+
+                msg += `${icon} ${i.sender_username} | ${i.amount}\n`;
+            });
+
+            msg += `\n`;
+        }
+
+        await tg("sendMessage", {
+            chat_id: chatId,
+            parse_mode: "HTML",
+            text: msg
+        });
+    }
+}
+
 
 
 
@@ -201,164 +257,7 @@ export default async function handler(req, res) {
             // ---------- MENU ----------
             if (!state) {
                 if (chatId === ADMIN_ID) {
-                    // ----- ADMIN MENU -----
-                    // if (chatId === ADMIN_ID && text === "📋 All Submissions") {
-                    //     const data = await fetch(SHEETDB_API).then(r => r.json());
-
-                    //     if (!data.length) {
-                    //         await tg("sendMessage", {
-                    //             chat_id: ADMIN_ID,
-                    //             text: "No submissions found",
-                    //             reply_markup: mainMenuAdmin
-                    //         });
-                    //         return res.json({ ok: true });
-                    //     }
-
-                    //     // group by username
-                    //     const byUser = {};
-                    //     data.forEach(i => {
-                    //         if (!byUser[i.telegram_user]) byUser[i.telegram_user] = [];
-                    //         byUser[i.telegram_user].push(i);
-                    //     });
-
-                    //     for (const user in byUser) {
-                    //         await tg("sendMessage", {
-                    //             chat_id: ADMIN_ID,
-                    //             text: `👤 USER: @${user}`
-                    //         });
-
-                    //         // group by date
-                    //         const byDate = {};
-                    //         byUser[user].forEach(i => {
-                    //             const d = i.date.slice(0, 8);
-                    //             if (!byDate[d]) byDate[d] = [];
-                    //             byDate[d].push(i);
-                    //         });
-
-                    //         for (const date in byDate) {
-                    //             await tg("sendMessage", {
-                    //                 chat_id: ADMIN_ID,
-                    //                 text: `📅 Date: ${date.slice(0, 4)}-${date.slice(4, 6)}-${date.slice(6, 8)}`
-                    //             });
-
-                    //             for (const i of byDate[date]) {
-
-                    //                 let buttons = [];
-
-                    //                 if (i.status === "pending") {
-                    //                     buttons = [[
-                    //                         { text: "✅ Accept", callback_data: `accept:${i.date}:${i.chat_id}` },
-                    //                         { text: "❌ Cancel", callback_data: `cancel:${i.date}:${i.chat_id}` }
-                    //                     ]];
-                    //                 }
-
-                    //                 if (i.status === "accepted") {
-                    //                     buttons = [[
-                    //                         { text: "💸 Paid", callback_data: `paid:${i.date}:${i.chat_id}` }
-                    //                     ]];
-                    //                 }
-
-                    //                 // canceled / paid → no button
-
-                    //                 await tg("sendMessage", {
-                    //                     chat_id: ADMIN_ID,
-                    //                     parse_mode: "HTML",
-                    //                     text:
-                    //                         `🔁 <b>Sender:</b> ${i.sender_username}\n` +
-                    //                         `💰 <b>Amount:</b> ${i.amount}\n` +
-                    //                         `📌 <b>Status:</b> ${i.status.toUpperCase()}`,
-                    //                     reply_markup: buttons.length
-                    //                         ? { inline_keyboard: buttons }
-                    //                         : undefined
-                    //                 });
-                    //             }
-                    //         }
-                    //     }
-
-                    //     return res.json({ ok: true });
-                    // }
-
-
-                    // if (chatId === ADMIN_ID && text === "📊 Total Info") {
-                    //     const data = await fetch(SHEETDB_API).then(r => r.json());
-
-                    //     if (!data.length) {
-                    //         await tg("sendMessage", {
-                    //             chat_id: ADMIN_ID,
-                    //             text: "No data found"
-                    //         });
-                    //         return res.json({ ok: true });
-                    //     }
-
-                    //     // counters
-                    //     const userStats = {};
-                    //     let totalAccepted = 0;
-                    //     let totalCanceled = 0;
-                    //     let totalPaid = 0;
-
-                    //     data.forEach(i => {
-                    //         const user = i.telegram_user || "unknown";
-
-                    //         if (!userStats[user]) {
-                    //             userStats[user] = {
-                    //                 accepted: 0,
-                    //                 canceled: 0,
-                    //                 paid: 0
-                    //             };
-                    //         }
-
-                    //         if (i.status === "accepted") {
-                    //             userStats[user].accepted++;
-                    //             totalAccepted++;
-                    //         }
-
-                    //         if (i.status === "canceled") {
-                    //             userStats[user].canceled++;
-                    //             totalCanceled++;
-                    //         }
-
-                    //         if (i.status === "paid") {
-                    //             userStats[user].paid++;
-                    //             totalPaid++;
-                    //         }
-                    //     });
-
-                    //     // per user message
-                    //     for (const user in userStats) {
-                    //         const s = userStats[user];
-
-                    //         await tg("sendMessage", {
-                    //             chat_id: ADMIN_ID,
-                    //             text:
-                    //                 `👤 @${user}\n` +
-                    //                 `✅ Accepted: ${s.accepted}\n` +
-                    //                 `❌ Canceled: ${s.canceled}\n` +
-                    //                 `💸 Paid: ${s.paid}`
-                    //         });
-                    //     }
-
-                    //     // grand total
-                    //     await tg("sendMessage", {
-                    //         chat_id: ADMIN_ID,
-                    //         text:
-                    //             `📦 GRAND TOTAL\n\n` +
-                    //             `✅ Accepted: ${totalAccepted}\n` +
-                    //             `❌ Canceled: ${totalCanceled}\n` +
-                    //             `💸 Paid: ${totalPaid}`
-                    //     });
-
-                    //     return res.json({ ok: true });
-                    // }
-
-
-                    // if (text === "🔄 Refresh Data") {
-                    //     await tg("sendMessage", {
-                    //         chat_id: ADMIN_ID,
-                    //         text: "✅ Data refreshed.",
-                    //         reply_markup: mainMenuAdmin,
-                    //     });
-                    //     return res.json({ ok: true });
-                    // }
+                    // ----- ADMIN MENU ----
 
                     // ⏳ Pending
                     if (text === "⏳ Pending List") {
@@ -373,7 +272,7 @@ export default async function handler(req, res) {
                     }
 
                     // paid
-                    
+
                     if (text === "💸 Paid List") {
                         await showPaidListSingleMessage(ADMIN_ID);
                         return res.json({ ok: true });
@@ -382,9 +281,10 @@ export default async function handler(req, res) {
 
                     // 📋 All
                     if (text === "📋 All List") {
-                        await showAdminList(null, ADMIN_ID); // no filter
+                        await showAllListSingleMessage(ADMIN_ID);
                         return res.json({ ok: true });
                     }
+
 
                 } else {
                     // ----- NORMAL USER MENU -----
