@@ -94,6 +94,59 @@ async function showAdminList(statusFilter, chatId) {
     }
 }
 
+async function showPaidListSingleMessage(chatId) {
+    const data = await fetch(SHEETDB_API).then(r => r.json());
+
+    const paidData = data.filter(i => i.status === "paid");
+
+    if (!paidData.length) {
+        await tg("sendMessage", {
+            chat_id: chatId,
+            text: "❌ No paid data found"
+        });
+        return;
+    }
+
+    // group by user
+    const byUser = {};
+    paidData.forEach(i => {
+        if (!byUser[i.telegram_user]) byUser[i.telegram_user] = [];
+        byUser[i.telegram_user].push(i);
+    });
+
+    for (const user in byUser) {
+        let msg = `👤 <b>USER:</b> @${user}\n\n`;
+
+        // group by date
+        const byDate = {};
+        byUser[user].forEach(i => {
+            const d = i.date.slice(0, 8);
+            if (!byDate[d]) byDate[d] = [];
+            byDate[d].push(i);
+        });
+
+        // sort date desc
+        const sortedDates = Object.keys(byDate).sort().reverse();
+
+        for (const d of sortedDates) {
+            msg += `📅 <b>${d.slice(0, 4)}-${d.slice(4, 6)}-${d.slice(6, 8)}</b>\n`;
+
+            byDate[d].forEach(i => {
+                msg += `• ${i.sender_username} | ${i.amount}\n`;
+            });
+
+            msg += `\n`;
+        }
+
+        await tg("sendMessage", {
+            chat_id: chatId,
+            parse_mode: "HTML",
+            text: msg
+        });
+    }
+}
+
+
 
 // ---------- MENUS ----------
 const mainMenuUser = {
@@ -319,11 +372,13 @@ export default async function handler(req, res) {
                         return res.json({ ok: true });
                     }
 
-                    // 💸 Paid
+                    // paid
+                    
                     if (text === "💸 Paid List") {
-                        await showAdminList("paid", ADMIN_ID);
+                        await showPaidListSingleMessage(ADMIN_ID);
                         return res.json({ ok: true });
                     }
+
 
                     // 📋 All
                     if (text === "📋 All List") {
