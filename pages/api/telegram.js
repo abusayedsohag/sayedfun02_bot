@@ -85,7 +85,7 @@ async function showAdminList(statusFilter, chatId) {
                         `🔁 <b>Sender:</b> ${i.sender_username}\n` +
                         `💰 <b>Amount:</b> ${i.amount}\n` +
                         `📌 <b>Status:</b> ${i.status.toUpperCase()}\n\n` +
-                        `<code>${i.sender_username} | ${i.amount}</code?`,
+                        `<code>${i.sender_username} | ${i.amount}</code>`,
                     reply_markup: buttons.length
                         ? { inline_keyboard: buttons }
                         : undefined
